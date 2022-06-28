@@ -165,3 +165,12 @@ func (s *StandaloneComponents) splitYamlDoc(data []byte, atEOF bool) (advance in
 	// Request more data.
 	return 0, nil, nil
 }
+
+//Load configuration from JSON
+func (s *StandaloneComponents) LoadComponentsFromJSON(b []byte) ([]components_v1alpha1.Component, error) {
+	components, errors := s.decodeYaml(b)
+	for _, err := range errors {
+		log.Warnf("daprd load components error when parsing components yaml resource : %s", err)
+	}
+	return components, nil
+}

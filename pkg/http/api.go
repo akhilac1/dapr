@@ -94,6 +94,7 @@ type api struct {
 	tracingSpec                config.TracingSpec
 	shutdown                   func()
 	getComponentsCapabilitesFn func() map[string][]string
+	lateLoadComponentsFn       func([]byte) error
 }
 
 type registeredComponent struct {
@@ -151,6 +152,7 @@ func NewAPI(
 	tracingSpec config.TracingSpec,
 	shutdown func(),
 	getComponentsCapabilitiesFn func() map[string][]string,
+	lateLoadComponentsFn func([]byte) error,
 ) API {
 	transactionalStateStores := map[string]state.TransactionalStore{}
 	for key, store := range stateStores {
@@ -177,6 +179,7 @@ func NewAPI(
 		tracingSpec:                tracingSpec,
 		shutdown:                   shutdown,
 		getComponentsCapabilitesFn: getComponentsCapabilitiesFn,
+		lateLoadComponentsFn:       lateLoadComponentsFn,
 	}
 
 	metadataEndpoints := api.constructMetadataEndpoints()
@@ -193,6 +196,7 @@ func NewAPI(
 	api.endpoints = append(api.endpoints, api.constructConfigurationEndpoints()...)
 	api.endpoints = append(api.endpoints, healthEndpoints...)
 	api.endpoints = append(api.endpoints, api.constructDistributedLockEndpoints()...)
+	api.endpoints = append(api.endpoints, api.constructLateLoadConfigurationEndpoints()...)
 
 	api.publicEndpoints = append(api.publicEndpoints, metadataEndpoints...)
 	api.publicEndpoints = append(api.publicEndpoints, healthEndpoints...)
@@ -436,6 +440,17 @@ func (a *api) constructConfigurationEndpoints() []Endpoint {
 			Route:   "configuration/{configurationSubscribeID}/unsubscribe",
 			Version: apiVersionV1alpha1,
 			Handler: a.onUnsubscribeConfiguration,
+		},
+	}
+}
+
+func (a *api) constructLateLoadConfigurationEndpoints() []Endpoint {
+	return []Endpoint{
+		{
+			Methods: []string{fasthttp.MethodPost, fasthttp.MethodPut, fasthttp.MethodDelete},
+			Route:   "loadConfig",
+			Version: apiVersionV1alpha1,
+			Handler: a.onLateLoadConfig,
 		},
 	}
 }
@@ -813,6 +828,18 @@ func (h *configurationEventHandler) updateEventHandler(ctx context.Context, e *c
 	return nil
 }
 
+func (a *api) onLateLoadConfig(reqCtx *fasthttp.RequestCtx) {
+	//req := make([]components_v1alpha1.Component, 0)
+	err := a.lateLoadComponentsFn(reqCtx.Request.Body())
+	//json.Unmarshal(reqCtx.Request.Body(), &req)
+	if err != nil {
+		msg := NewErrorResponse("ERR_MALFORMED_REQUEST", err.Error())
+		respond(reqCtx, withError(fasthttp.StatusBadRequest, msg))
+		log.Debug(msg)
+		return
+	}
+}
+
 func (a *api) onLock(reqCtx *fasthttp.RequestCtx) {
 	store, storeName, err := a.getLockStoreWithRequestValidation(reqCtx)
 	if err != nil {
@@ -980,6 +1007,11 @@ func (a *api) onSubscribeConfiguration(reqCtx *fasthttp.RequestCtx) {
 	respond(reqCtx, withJSON(fasthttp.StatusOK, respBytes))
 }
 
+/*
+func (a *api) onLoadConfiguration(reqCtx *fasthttp.RequestCtx) {
+
+}
+*/
 func (a *api) onUnsubscribeConfiguration(reqCtx *fasthttp.RequestCtx) {
 	store, storeName, err := a.getConfigurationStoreWithRequestValidation(reqCtx)
 	if err != nil {

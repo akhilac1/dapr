@@ -202,6 +202,7 @@ type DaprRuntime struct {
 	proxy messaging.Proxy
 
 	resiliency resiliency.Provider
+	//delayComponentLoading bool //Load the components after Daprd startup
 }
 
 type ComponentsCallback func(components ComponentRegistry) error
@@ -271,6 +272,7 @@ func NewDaprRuntime(runtimeConfig *Config, globalConfig *config.Configuration, a
 		shutdownC:                  make(chan error, 1),
 
 		resiliency: resiliencyProvider,
+		//delayComponentLoading: true,
 	}
 }
 
@@ -395,13 +397,15 @@ func (a *DaprRuntime) initRuntime(opts *runtimeOpts) error {
 	if !a.runtimeConfig.DisableBuiltinK8sSecretStore {
 		a.appendBuiltinSecretStore()
 	}
+	//In standalone mode allow daprd to load configuration later
+	//if a.runtimeConfig.Mode == modes.StandaloneMode && !a.delayComponentLoading {
 	err = a.loadComponents(opts)
 	if err != nil {
 		log.Warnf("failed to load components: %s", err)
 	}
 
 	a.flushOutstandingComponents()
-
+	//}
 	pipeline, err := a.buildHTTPPipeline()
 	if err != nil {
 		log.Warnf("failed to build HTTP pipeline: %s", err)
@@ -1112,6 +1116,7 @@ func (a *DaprRuntime) startHTTPServer(port int, publicPort *int, profilePort int
 		a.globalConfig.Spec.TracingSpec,
 		a.ShutdownWithWait,
 		a.getComponentsCapabilitesMap,
+		a.LateLoadComponents,
 	)
 	serverConf := http.NewServerConfig(
 		a.runtimeConfig.ID,
@@ -1948,6 +1953,37 @@ func (a *DaprRuntime) loadComponents(opts *runtimeOpts) error {
 	if err != nil {
 		return err
 	}
+	for _, comp := range comps {
+		log.Debugf("found component. name: %s, type: %s/%s", comp.ObjectMeta.Name, comp.Spec.Type, comp.Spec.Version)
+	}
+
+	authorizedComps := a.getAuthorizedComponents(comps)
+
+	a.componentsLock.Lock()
+	a.components = make([]components_v1alpha1.Component, len(authorizedComps))
+	copy(a.components, authorizedComps)
+	a.componentsLock.Unlock()
+
+	for _, comp := range authorizedComps {
+		a.pendingComponents <- comp
+	}
+
+	return nil
+}
+
+func (a *DaprRuntime) LateLoadComponents(b []byte) error {
+	loader := components.NewStandaloneComponents(a.runtimeConfig.Standalone)
+
+	if a.runtimeConfig.Mode != modes.StandaloneMode {
+		return errors.Errorf("Dapr is running in %s mode. Late Loading is supported in Standalone mode only - ", a.runtimeConfig.Mode)
+	}
+
+	log.Info("Late Loading components")
+	comps, err := loader.LoadComponentsFromJSON(b)
+	if err != nil {
+		return err
+	}
+
 	for _, comp := range comps {
 		log.Debugf("found component. name: %s, type: %s/%s", comp.ObjectMeta.Name, comp.Spec.Type, comp.Spec.Version)
 	}

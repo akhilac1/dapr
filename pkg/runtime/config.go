@@ -77,6 +77,7 @@ type Config struct {
 	GracefulShutdownDuration     time.Duration
 	EnableAPILogging             bool
 	DisableBuiltinK8sSecretStore bool
+	DelayComponentLoading        bool
 }
 
 // NewRuntimeConfig returns a new runtime config.
@@ -84,7 +85,7 @@ func NewRuntimeConfig(
 	id string, placementAddresses []string, controlPlaneAddress, allowedOrigins, globalConfig, componentsPath,
 	appProtocol, mode string, httpPort, internalGRPCPort, apiGRPCPort int, apiListenAddresses []string, publicPort *int,
 	appPort, profilePort int, enableProfiling bool, maxConcurrency int, mtlsEnabled bool, sentryAddress string, appSSL bool,
-	maxRequestBodySize int, unixDomainSocket string, readBufferSize int, streamRequestBody bool, gracefulShutdownDuration time.Duration, enableAPILogging bool, disableBuiltinK8sSecretStore bool,
+	maxRequestBodySize int, unixDomainSocket string, readBufferSize int, streamRequestBody bool, gracefulShutdownDuration time.Duration, enableAPILogging bool, disableBuiltinK8sSecretStore bool, delayComponentLoading bool,
 ) *Config {
 	return &Config{
 		ID:                  id,
@@ -118,5 +119,6 @@ func NewRuntimeConfig(
 		GracefulShutdownDuration:     gracefulShutdownDuration,
 		EnableAPILogging:             enableAPILogging,
 		DisableBuiltinK8sSecretStore: disableBuiltinK8sSecretStore,
+		DelayComponentLoading:        delayComponentLoading,
 	}
 }
