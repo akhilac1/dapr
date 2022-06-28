@@ -94,7 +94,7 @@ type api struct {
 	tracingSpec                config.TracingSpec
 	shutdown                   func()
 	getComponentsCapabilitesFn func() map[string][]string
-	lateLoadComponentsFn       func([]byte) error
+	DynamicLoadComponentsFn    func([]byte) error
 }
 
 type registeredComponent struct {
@@ -152,7 +152,7 @@ func NewAPI(
 	tracingSpec config.TracingSpec,
 	shutdown func(),
 	getComponentsCapabilitiesFn func() map[string][]string,
-	lateLoadComponentsFn func([]byte) error,
+	DynamicLoadComponentsFn func([]byte) error,
 ) API {
 	transactionalStateStores := map[string]state.TransactionalStore{}
 	for key, store := range stateStores {
@@ -179,7 +179,7 @@ func NewAPI(
 		tracingSpec:                tracingSpec,
 		shutdown:                   shutdown,
 		getComponentsCapabilitesFn: getComponentsCapabilitiesFn,
-		lateLoadComponentsFn:       lateLoadComponentsFn,
+		DynamicLoadComponentsFn:    DynamicLoadComponentsFn,
 	}
 
 	metadataEndpoints := api.constructMetadataEndpoints()
@@ -830,7 +830,7 @@ func (h *configurationEventHandler) updateEventHandler(ctx context.Context, e *c
 
 func (a *api) onLateLoadConfig(reqCtx *fasthttp.RequestCtx) {
 	//req := make([]components_v1alpha1.Component, 0)
-	err := a.lateLoadComponentsFn(reqCtx.Request.Body())
+	err := a.DynamicLoadComponentsFn(reqCtx.Request.Body())
 	//json.Unmarshal(reqCtx.Request.Body(), &req)
 	if err != nil {
 		msg := NewErrorResponse("ERR_MALFORMED_REQUEST", err.Error())

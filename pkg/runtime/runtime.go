@@ -1116,7 +1116,7 @@ func (a *DaprRuntime) startHTTPServer(port int, publicPort *int, profilePort int
 		a.globalConfig.Spec.TracingSpec,
 		a.ShutdownWithWait,
 		a.getComponentsCapabilitesMap,
-		a.LateLoadComponents,
+		a.DynamicLoadComponents,
 	)
 	serverConf := http.NewServerConfig(
 		a.runtimeConfig.ID,
@@ -1971,7 +1971,7 @@ func (a *DaprRuntime) loadComponents(opts *runtimeOpts) error {
 	return nil
 }
 
-func (a *DaprRuntime) LateLoadComponents(b []byte) error {
+func (a *DaprRuntime) DynamicLoadComponents(b []byte) error {
 	loader := components.NewStandaloneComponents(a.runtimeConfig.Standalone)
 
 	if a.runtimeConfig.Mode != modes.StandaloneMode {
@@ -1984,21 +1984,14 @@ func (a *DaprRuntime) LateLoadComponents(b []byte) error {
 		return err
 	}
 
-	for _, comp := range comps {
-		log.Debugf("found component. name: %s, type: %s/%s", comp.ObjectMeta.Name, comp.Spec.Type, comp.Spec.Version)
-	}
-
-	authorizedComps := a.getAuthorizedComponents(comps)
-
 	a.componentsLock.Lock()
-	a.components = make([]components_v1alpha1.Component, len(authorizedComps))
-	copy(a.components, authorizedComps)
-	a.componentsLock.Unlock()
-
-	for _, comp := range authorizedComps {
-		a.pendingComponents <- comp
+	for _, comp := range comps {
+		if !a.IsComponentLoaded(comp) && a.isComponentAuthorized(comp) {
+			a.components = append(a.components, comp)
+			a.pendingComponents <- comp
+		}
 	}
-
+	a.componentsLock.Unlock()
 	return nil
 }
 
@@ -2582,4 +2575,27 @@ func (a *DaprRuntime) startReadingFromBindings() error {
 		}(name, binding)
 	}
 	return nil
+}
+
+//Return true if the component is already loaded in the side car - Name, Type and version are matched
+func (a *DaprRuntime) IsComponentLoaded(comp components_v1alpha1.Component) bool {
+
+	//has the same component already been loaded? - match with name
+	for _, loadedComp := range a.components {
+		if strings.Compare(comp.ObjectMeta.Name, loadedComp.ObjectMeta.Name) == 0 {
+			//are they of the same type and version
+			if strings.Compare(comp.Spec.Type, loadedComp.Spec.Type) == 0 {
+				if strings.Compare(comp.Spec.Version, loadedComp.Spec.Version) == 0 {
+					log.Warnf("Cannot load multiple instances of same component with late loading. Component name already in use - name: %s type: %s/%s. Skipping delayed loading.", comp.ObjectMeta.Name, comp.Spec.Type, comp.Spec.Version)
+					return true
+				} else {
+					log.Warnf("Component with different version already loaded. Cannot load multiple instances with same name. Component name in use - name: %s type: %s/%s. Skipping delayed loading.", comp.ObjectMeta.Name, comp.Spec.Type, comp.Spec.Version)
+					return true
+				}
+			}
+			log.Infof("Component name already in use - name: %s type: %s/%s. Skipping delayed loading.", comp.ObjectMeta.Name, comp.Spec.Type, comp.Spec.Version)
+			return true
+		}
+	}
+	return false
 }
