@@ -1975,10 +1975,10 @@ func (a *DaprRuntime) DynamicLoadComponents(b []byte) error {
 	loader := components.NewStandaloneComponents(a.runtimeConfig.Standalone)
 
 	if a.runtimeConfig.Mode != modes.StandaloneMode {
-		return errors.Errorf("Dapr is running in %s mode. Late Loading is supported in Standalone mode only - ", a.runtimeConfig.Mode)
+		return errors.Errorf("Dapr is running in %s mode. Dynamic Loading is supported in Standalone mode only - ", a.runtimeConfig.Mode)
 	}
 
-	log.Info("Late Loading components")
+	log.Info("Dynamic Loading components")
 	comps, err := loader.LoadComponentsFromJSON(b)
 	if err != nil {
 		return err
