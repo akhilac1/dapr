@@ -122,7 +122,7 @@ func ParseVolumeMountsString(volumeMountStr string, readOnly bool) []corev1.Volu
 	return volumeMounts
 }
 
-// StringSliceContains return true if an array containe the "str" string.
+// StringSliceContains return true if an array contains the "str" string.
 func StringSliceContains(needle string, haystack []string) bool {
 	for _, item := range haystack {
 		if item == needle {
@@ -141,6 +141,17 @@ func SetEnvVariables(variables map[string]string) error {
 		}
 	}
 	return nil
+}
+
+// IsTruthy returns true if a string is a truthy value.
+// Truthy values are "y", "yes", "true", "t", "on", "1" (case-insensitive); everything else is false.
+func IsTruthy(val string) bool {
+	switch strings.ToLower(strings.TrimSpace(val)) {
+	case "y", "yes", "true", "t", "on", "1":
+		return true
+	default:
+		return false
+	}
 }
 
 // IsYaml checks whether the file is yaml or not.
